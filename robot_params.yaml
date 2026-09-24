@@ -87,7 +87,7 @@ legs:
 # TowerPro-style MG996R hobby servo, PWM via PCA9685. Values are the
 # DATASHEET (Handsontec EMH-1056); M3/M5 replace them with MEASURED values per
 # servo, which is what makes the M9 RL sim-to-real transfer honest.
-# Chosen over STS3215 on price -- see vault ADR-007.
+# Chosen over the STS3215 on price (see hardware/bom.md).
 actuator:
   model: MG996R
   interface: pwm_pca9685

@@ -13,7 +13,7 @@ quotes. **Confirm before ordering.**
 | Feetech STS3215 (12 V / 9 V variants) | ~$30 | ~$360 | ✅ | Rejected — same reason |
 | DS3218MG (20 kg·cm) | ~990–1,285 TL | ~12–15k TL | ❌ | Badly priced in TR — skip |
 
-Decision record: vault `ADR-007 MG996R Servos` (supersedes ADR-002).
+The MG996R replaced the STS3215 on price: the STS3215's encoder feedback is the better servo, but twelve of them cost more than the whole budget.
 
 ### MG996R — datasheet (Handsontec EMH-1056)
 
