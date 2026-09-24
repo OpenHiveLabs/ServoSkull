@@ -1,0 +1,41 @@
+# ── MuJoCo viewer "Print model / Print data" dumps ─────────────────────────
+MJMODEL.TXT
+MJDATA.TXT
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# ── Generated simulation artifacts ─────────────────────────────────────────
+sim/models/*.xml
+!sim/models/.gitkeep
+
+# ── CAD working files (keep STEP/STL/3MF, drop backups & locks) ────────────
+cad/source/*.f3d.bak
+*.lck
+*.f3d.lock
+
+# ── Calibration is per-physical-robot, not source of truth ────────────────
+calibration/*.yaml
+!calibration/example.yaml
+
+# ── Secrets ────────────────────────────────────────────────────────────────
+.env
+*.key
+secrets.*
+
+# ── OS / editor ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Media (large; keep out of git, they live in the video project) ────────
+*.mp4
+*.mov
+*.MP4

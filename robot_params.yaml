@@ -1,0 +1,151 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  ServoSkull — SINGLE SOURCE OF TRUTH
+# ═══════════════════════════════════════════════════════════════════════════
+#  Every kinematic constant lives HERE and nowhere else.
+#
+#  Consumed by:  sim/gen_model.py      → generates the MuJoCo MJCF
+#                software/skull_kinematics/  → runtime IK on the Pi
+#                docs/cad-spec.md      → the dimension table you type into Fusion
+#
+#  RULE: if a number describes the robot's geometry, it belongs in this file.
+#  Never hardcode a link length in Python. Never type one into Fusion that
+#  didn't come from here. This is what stops sim and reality drifting apart.
+#
+#  Units: millimetres, degrees, grams. (Converted to m/rad at the boundary.)
+#  Status: M1-TUNED. Link lengths and sway gain were swept in simulation
+#  against the stability + reachability gates before any CAD was drawn.
+#  Verified operating point (see tests/test_gait.py):
+#      stability margin  +46.4 mm   (requirement: >= 15 mm)
+#      reach headroom    +24.1 mm
+#      peak femur torque  12.8 kg.cm
+#  These numbers were tuned for the STS3215 (30 kg.cm). With the MG996R
+#  (~9 kg.cm usable, see actuator: below) the design is TORQUE-limited as well:
+#  the leg geometry must be re-derived before leg CAD (walking skull, M7/M10).
+# ═══════════════════════════════════════════════════════════════════════════
+
+meta:
+  name: servoskull
+  revision: 0.2.0-m1-tuned
+  updated: 2026-09-09
+
+# ── Body ───────────────────────────────────────────────────────────────────
+# The skull itself is the chassis. Coxa servos mount to its underside.
+body:
+  skull_length: 200.0        # nose-to-occiput  (the ~180-220mm target)
+  skull_width:  140.0
+  skull_height: 150.0
+  mass_budget:  1500.0       # g, TOTAL. The binding design constraint.
+
+  # Coxa mounting points, measured from skull centre (origin at CoM, +X fwd,
+  # +Y left, +Z up). Rectangular footprint, wider than long for lateral
+  # stability during the crawl gait.
+  mount_half_length:  70.0   # ±X to the coxa axis
+  mount_half_width:   55.0   # ±Y to the coxa axis
+  mount_z:           -40.0   # coxa axes sit below skull centre
+
+# ── Leg (spider / insect topology) ─────────────────────────────────────────
+#
+#   coxa   : revolute about the VERTICAL axis (yaw). Swings the leg around
+#            the body. Carries almost no gravity torque — the easy joint.
+#   femur  : revolute about the horizontal axis, in the leg's radial plane.
+#   tibia  : revolute, same plane. Together femur+tibia are a 2-link planar
+#            arm, which is what makes the IK closed-form.
+#
+leg:
+  coxa_length:  45.0    # coxa axis → femur axis (horizontal offset)
+  femur_length: 90.0    # femur axis → tibia axis
+  tibia_length: 130.0   # tibia axis → foot contact point
+
+  # Resting splay: how far out the legs are pushed at neutral stance.
+  # Larger = wider support polygon = more stable crawl, but longer moment
+  # arm on the femur servo. 30 deg is the M1 starting point.
+  default_splay: 30.0
+
+  foot_radius: 8.0      # hemispherical foot tip
+
+# ── Joint limits ───────────────────────────────────────────────────────────
+# Mechanical travel. Keep INSIDE the servo's electrical range so a commanded
+# angle can never drive the horn into the printed part.
+limits:
+  coxa:  { min: -45.0, max:  45.0 }
+  femur: { min: -90.0, max:  90.0 }
+  tibia: { min:   0.0, max: 150.0 }   # knee bends one way only
+
+# ── Per-leg configuration ──────────────────────────────────────────────────
+# mount_angle = the leg's outward radial direction in the body XY plane.
+# `channels` are PCA9685 outputs [coxa, femur, tibia]. One 16-channel board
+# drives all 15 PWM servos: legs 0-11, head 12-14, channel 15 spare.
+# `mirrored` flips the femur/tibia sign convention for the right-hand legs,
+# so IK can be written once for a canonical leg and reused for all four.
+legs:
+  - { name: front_left,  mount_angle:  45.0, channels: [0, 1, 2],   mirrored: false }
+  - { name: front_right, mount_angle: -45.0, channels: [3, 4, 5],   mirrored: true  }
+  - { name: rear_left,   mount_angle: 135.0, channels: [6, 7, 8],   mirrored: false }
+  - { name: rear_right,  mount_angle: -135.0, channels: [9, 10, 11], mirrored: true  }
+
+# ── Actuators ──────────────────────────────────────────────────────────────
+# TowerPro-style MG996R hobby servo, PWM via PCA9685. Values are the
+# DATASHEET (Handsontec EMH-1056); M3/M5 replace them with MEASURED values per
+# servo, which is what makes the M9 RL sim-to-real transfer honest.
+# Chosen over STS3215 on price -- see vault ADR-007.
+actuator:
+  model: MG996R
+  interface: pwm_pca9685
+  pwm_frequency: 50         # Hz (20 ms period)
+  pulse_min_us: 1000        # datasheet nominal. Clones often reach 500..2500 --
+  pulse_max_us: 2000        #   measure each servo's real end stops at M3.
+  rotation_range: 120.0     # deg over the nominal pulse range (datasheet).
+                            #   NOTE limits.femur asks for 180 -- verify on hardware.
+  voltage: 6.0              # servo rail. Rated 4.8..7.2 V.
+  stall_torque: 11.0        # kg.cm @6V (9.4 @4.8V)
+  usable_torque: 9.0        # kg.cm, derated for clones + continuous holding.
+                            #   Current geometry needs ~12.8 on the femur -- too much.
+  no_load_speed: 428.0      # deg/s @6V (0.14 s/60deg)
+  running_current: 0.5      # A
+  stall_current: 2.5        # A @6V
+  deadband_us: 5            # ~0.5 deg nominal; clones often worse
+  feedback: none            # stage 2: pot-tap mod read via 2x MCP3008
+
+  # MuJoCo position-actuator gains. Provisional; M5 fits them to real step
+  # response. Do not trust these numbers until then.
+  kp: 25.0
+  damping: 0.6
+  frictionloss: 0.02
+
+# ── Gait (statically stable crawl) ─────────────────────────────────────────
+# One leg swings at a time; three feet always down. Stability reduces to
+# "keep the CoM inside the support triangle", which is checkable in sim.
+gait:
+  type: crawl
+  cycle_time: 4.0           # s for all four legs to step once
+  # Must be > 0.75 for four legs. At exactly 0.75 the swings run back-to-back
+  # with no all-feet-down gap, and the body is forced to sway across the
+  # polygon while a foot is airborne -- provably unstable. See gait.py.
+  duty_factor: 0.85         # fraction of cycle each leg is in stance
+  step_length: 45.0         # mm of body travel per full cycle
+  step_height: 35.0         # mm peak of the Bezier swing arc
+  body_height: 95.0         # mm, foot plane to coxa axis, at neutral stance
+  stability_margin_min: 15.0  # mm. CoM must stay this far inside the triangle.
+
+  # Body sway. A centred body has NEGATIVE margin on two of the four support
+  # triangles (verified in sim) -- it tips when it lifts a right-side leg. The
+  # body must shift toward the triangle it is about to stand on. This is why
+  # crawling robots waddle; it is load-bearing, not decorative.
+  body_shift_gain: 0.55   # 0 = no shift (unstable), 1 = all the way to centroid
+  # (the sway happens during the all-feet-down gap; no extra blend needed)
+
+  # Leg swing order. Diagonal alternation keeps the CoM shift small between
+  # consecutive steps — a well-known result for statically stable quadrupeds.
+  sequence: [front_left, rear_right, front_right, rear_left]
+
+# ── Head servos (micro, PWM — same PCA9685 as the legs) ────────────────────
+head:
+  eye_pan:  { channel: 12, min: -60.0, max: 60.0 }
+  eye_tilt: { channel: 13, min: -30.0, max: 40.0 }
+  jaw:      { channel: 14, min:   0.0, max: 25.0 }   # driven by TTS envelope
+
+# ── Identity (swarm-readiness: every robot is addressable from day one) ────
+identity:
+  robot_id: skull-01
+  robot_class: servoskull
+  key_prefix: "skull/skull-01"   # Zenoh-shaped key expression namespace
