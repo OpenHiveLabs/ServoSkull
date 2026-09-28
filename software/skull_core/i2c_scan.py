@@ -5,7 +5,7 @@ Exit code 0 if every --expect address answered, 1 otherwise.
 """
 import argparse
 import sys
-from smbus2 import SMbus 
+from smbus2 import SMBus 
 
 def scan(bus_number: int) -> list[int]:
     """Return the addresses (0x03..0x77) that acknowledge on this bus."""
