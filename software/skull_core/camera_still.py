@@ -3,9 +3,10 @@
 Usage:  python tools/bringup/camera_still.py [--out captures/] [--width 1536 --height 864]
 """
 import argparse
-from datetime import datetime, time
+from datetime import datetime
 from pathlib import Path
 from picamera2 import Picamera2
+import time
 
 def timestamped_path(out_dir: Path) -> Path:
     """Return out_dir/still_YYYY-MM-DD_HH-MM-SS.jpg, creating out_dir if needed."""
