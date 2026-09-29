@@ -39,3 +39,6 @@ Thumbs.db
 *.mp4
 *.mov
 *.MP4
+
+# Bring-up captures (camera stills, test recordings)
+captures/

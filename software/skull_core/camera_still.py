@@ -22,15 +22,12 @@ def take_still(path: Path, width: int, height: int) -> None:
     
     camera.start()
     time.sleep(2)
-    camera.capture_file("TEST")
+    camera.capture_file(str(path))
     camera.stop()
-    raise NotImplementedError
 
 def main() -> int:
-    timestamped_path(Path("captures"))
-    take_still(Path("captures/still.jpg"), 1536, 864)
-    
-    raise NotImplementedError
+    path = timestamped_path(Path("captures"))
+    take_still(path, 1536, 864)
 
 if __name__ == "__main__":
     raise SystemExit(main())
