@@ -42,3 +42,9 @@ Thumbs.db
 
 # Bring-up captures (camera stills, test recordings)
 captures/
+
+# Bench voice clips (each person records their own; see software/skull_core/voice/README.md)
+software/skull_core/voice/*.wav
+
+# Raw voice recordings and backups (personal, never committed)
+raw/
