@@ -1,6 +1,7 @@
 # CPU-only; runs on any laptop and on the Pi 5.
 # MJX/JAX for GPU-parallel RL is deliberately NOT here — that is M9, on the
 # 4090 machine, and it would make this file unusable on the Pi.
+sounddevice>=0.5.6
 smbus2>=0.6.1
 mujoco>=3.12
 numpy>=2.0
