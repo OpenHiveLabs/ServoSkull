@@ -29,7 +29,7 @@ STATES: dict[str, tuple[str, tuple[Color, ...]]] = {
     "listening": ("blink", (BLUE,)),
     "offline": ("solid", (RED,)),
     "error": ("blink", (RED,)),
-    "speaking": ("blink", (BLUE,)),
+    "speaking": ("solid", (BLUE,)),
 }
 
 
@@ -146,26 +146,31 @@ class StatusLight:
 
 
 def main() -> int:
-    # TODO 6: argparse: exactly one of --test, --demo, --interactive (a mutually exclusive group).
-    #         --demo takes a state name or "all"; reject unknown names here, even though pattern_for
-    #         would fall back. --seconds per state (default 4), --pins R G B (default 5 6 13),
-    #         --common-anode, --blink-period (default DEFAULT_BLINK_PERIOD_S).
-    # TODO 7: import gpiozero's RGBLED HERE (not at the top). active_high = not common_anode.
-    # TODO 8: --test: red, green, blue one second each; print which one should be lit and on which
-    #         GPIO and physical pin, so you can spot a swapped wire. (Direct led.value is fine here:
-    #         it's a wiring check, not a state.)
-    # TODO 9: --demo: light = StatusLight(led, ...). For each state: print its name, light.set_state(name),
-    #         then loop light.update() + a short sleep (e.g. 0.02 s) until --seconds is up.
-    # TODO 17: --interactive: your choice from the table (A, B or C) keeps the pattern moving.
-    #          The main thread loops on input("state> ") -> parse_command:
-    #            a state -> light.set_state(it)
-    #            TEST    -> light.set_state(TEST_SHOWS)   (never set_state(TEST): it would show error)
-    #            None    -> print the valid states and the current light.state; change nothing
-    #            QUIT, or EOFError (Ctrl-D) -> leave the loop
-    # TODO 10: try/finally, for every mode: stop the ticker first (and wait for it), THEN led.close(),
-    #          so a Ctrl-C or Ctrl-D never leaves an LED on or a thread writing to a closed LED.
-    raise NotImplementedError
-
-
+    parser = argparse.ArgumentParser(description="Status LED demo")
+    parser.add_argument("--demo", required=True, help="a state name or 'all'")
+    parser.add_argument("--seconds", type=float, default=4)          # float, default 4
+    parser.add_argument("--pins", nargs=3, type=int, default=[5, 6, 13])             # 3 ints: nargs=3, type=int, default [5, 6, 13]
+    parser.add_argument("--blink-period", type=float, default=DEFAULT_BLINK_PERIOD_S)     # float, default DEFAULT_BLINK_PERIOD_S
+    args = parser.parse_args()
+    
+    if args.demo != "all" and args.demo not in STATES:
+        parser.error(f"Invalid state: {args.demo}")
+    
+    names = list(STATES) if args.demo == "all" else [args.demo]
+    
+    from gpiozero import RGBLED
+    led = RGBLED(*args.pins)
+    try:
+        for name in names:
+            print(name)
+            frames = pattern_for(name, args.blink_period)
+            start = time.monotonic()
+            while time.monotonic() - start < args.seconds:  # time since start < args.seconds
+                led.value = color_at(frames, time.monotonic() - start)  # color_at(frames, ?)
+                time.sleep(0.02)
+    finally:
+        led.off()
+        led.close()
+    return 0
 if __name__ == "__main__":
     sys.exit(main())
