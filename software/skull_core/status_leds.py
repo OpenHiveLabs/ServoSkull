@@ -92,60 +92,47 @@ QUIT = "quit"
 TEST = "test"              # a console command, NOT a state: never add it to STATES (ADR-006 contract)
 TEST_SHOWS = "speaking"    # the pattern the test command shows
 
-
 def parse_command(line: str) -> str | None:
-    """Turn one typed line into a state name, QUIT, TEST, or None.
-
-    Case and surrounding whitespace don't matter: "  Thinking " -> "thinking", "QUIT" -> QUIT, "Test" -> TEST.
-    Anything else returns None, an empty line included. The caller then lists the valid states and
-    KEEPS the current one. Not "error": a typo is not a fault of the skull (pattern_for's fallback
-    is for messages, not for the keyboard).
-    Ctrl-D is not a line: input() raises EOFError. Handle that in main, not here.
-    """
-    # TODO 11: normalise the line, then check it against STATES, QUIT and TEST
-    raise NotImplementedError
-
+    word = line.strip().lower()        # two string methods: trim the ends, then lower case
+    if word in STATES:                     # the six states
+        return word
+    if word in ("quit", "test"):              # the two console commands (use the constants, not strings)
+        return word
+    return None
 
 class StatusLight:
     """The skull's status light. set_state() is the ONLY way to change what it shows.
-
-    Callers today: --demo and --interactive (and M2-07's state console). In M3, a subscriber on
-    skull/skull-01/state/voice (ADR-006) calls the same set_state() with the message payload.
 
     led:   anything with a .value attribute: gpiozero's RGBLED on the Pi, a fake in the tests, or None.
     clock: returns seconds. time.monotonic on the Pi; the tests pass a fake they can move by hand.
     """
 
-    def __init__(self, led=None, blink_period_s: float = DEFAULT_BLINK_PERIOD_S,
-                 clock=time.monotonic, initial_state: str = "idle") -> None:
-        # TODO 12: store led, blink_period_s and clock, then go through set_state(initial_state).
-        #          (Don't copy set_state's logic here: the constructor uses the entry point too.)
-        raise NotImplementedError
+    def __init__(self, led=None, blink_period_s=DEFAULT_BLINK_PERIOD_S, clock=time.monotonic, initial_state="idle"):
+        self.led = led
+        self.blink_period_s = blink_period_s
+        self.clock = clock
+        self.state = "planning"                    # never a real state name
+        self.set_state(initial_state)
 
-    def set_state(self, state: str) -> None:
-        """Show `state` from now on. Afterwards self.state is the name actually shown.
+    def set_state(self, state):
+        if state not in STATES:
+            state = "error"                       # a status light must not crash on a bad message
+        if state == self.state:
+            return                          # same state: the clock keeps running
+        self._frames = pattern_for(state, self.blink_period_s)    # don't forget the blink period
+        self._start = self.clock()                   # "now", from self.clock (not time.monotonic: the tests fake it)
+        self.state = state
 
-        - A new state: build its frames with pattern_for and restart the pattern clock.
-        - The SAME state again: change nothing. The clock keeps running, so a re-published
-          "thinking" doesn't freeze the cycle on RED.
-        - An unknown state: show "error", the same fallback as pattern_for.
-        """
-        # TODO 13: resolve unknown names to "error" first, THEN compare with the current state
-        # TODO 14: store the new frames and the start time (think about the ticker thread reading them)
-        raise NotImplementedError
+    def color(self):
+        return color_at(self._frames, self.clock() - self._start)
 
-    def color(self) -> Color:
-        """The colour to show right now: color_at(frames, clock() - start)."""
-        # TODO 15
-        raise NotImplementedError
+    def update(self):
+        c = self.color()
+        if self.led is not None:
+            self.led.value = c
+        return c
 
-    def update(self) -> Color:
-        """Push color() to the LED (if there is one) and return it. The ticker calls this every tick."""
-        # TODO 16
-        raise NotImplementedError
-
-
-def main() -> int:
+def main() -> int:        
     parser = argparse.ArgumentParser(description="Status LED demo")
     parser.add_argument("--demo", required=True, help="a state name or 'all'")
     parser.add_argument("--seconds", type=float, default=4)          # float, default 4
@@ -158,19 +145,23 @@ def main() -> int:
     
     names = list(STATES) if args.demo == "all" else [args.demo]
     
-    from gpiozero import RGBLED
+    from gpiozero import RGBLED   
+    
     led = RGBLED(*args.pins)
+    light = StatusLight(led, blink_period_s=args.blink_period)
     try:
         for name in names:
             print(name)
-            frames = pattern_for(name, args.blink_period)
-            start = time.monotonic()
-            while time.monotonic() - start < args.seconds:  # time since start < args.seconds
-                led.value = color_at(frames, time.monotonic() - start)  # color_at(frames, ?)
+            light.set_state(name)
+            t_end = time.monotonic() + args.seconds
+            while time.monotonic() < t_end:
+                light.update()
                 time.sleep(0.02)
+    except KeyboardInterrupt:
+        print()                           # Ctrl-C: a newline instead of a traceback
     finally:
         led.off()
-        led.close()
+        led.close()   
     return 0
 if __name__ == "__main__":
     sys.exit(main())
