@@ -8,6 +8,7 @@ Options: --pins 5 6 13 (R G B, BCM numbers)  --common-anode  --blink-period 1.0
 """
 import argparse
 import sys
+import threading
 import time
 
 Color = tuple[float, float, float]
@@ -131,7 +132,13 @@ class StatusLight:
         if self.led is not None:
             self.led.value = c
         return c
-
+    
+def run_ticker(light: StatusLight, stop: threading.Event, tick_s: float = 0.02) -> None:
+    """Thread target: push the light's colour to the LED every tick until `stop` is set."""
+    while not stop.is_set():
+        light.update()
+        stop.wait(tick_s)
+            
 def main() -> int:        
     parser = argparse.ArgumentParser(description="Status LED demo")
     parser.add_argument("--demo", required=True, help="a state name or 'all'")
@@ -143,10 +150,10 @@ def main() -> int:
     if args.demo != "all" and args.demo not in STATES:
         parser.error(f"Invalid state: {args.demo}")
     
-    names = list(STATES) if args.demo == "all" else [args.demo]
+    names = list(STATES) if args.demo == "all" else [args.demo]  
     
-    from gpiozero import RGBLED   
-    
+    from gpiozero import RGBLED
+     
     led = RGBLED(*args.pins)
     light = StatusLight(led, blink_period_s=args.blink_period)
     try:
@@ -161,7 +168,7 @@ def main() -> int:
         print()                           # Ctrl-C: a newline instead of a traceback
     finally:
         led.off()
-        led.close()   
+        led.close()    # what you have now: off, close    
     return 0
 if __name__ == "__main__":
     sys.exit(main())
