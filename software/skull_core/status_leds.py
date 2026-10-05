@@ -7,6 +7,7 @@ Usage:  python software/skull_core/status_leds.py --test
 Options: --pins 5 6 13 (R G B, BCM numbers)  --common-anode  --blink-period 1.0
 """
 import argparse
+from html import parser
 import sys
 import threading
 import time
@@ -141,14 +142,16 @@ def run_ticker(light: StatusLight, stop: threading.Event, tick_s: float = 0.02) 
             
 def main() -> int:        
     parser = argparse.ArgumentParser(description="Status LED demo")
-    parser.add_argument("--demo", required=True, help="a state name or 'all'")
-    parser.add_argument("--seconds", type=float, default=4)          # float, default 4
-    parser.add_argument("--pins", nargs=3, type=int, default=[5, 6, 13])             # 3 ints: nargs=3, type=int, default [5, 6, 13]
+    mode = parser.add_mutually_exclusive_group(required=True)                             # the group is required...
+    mode.add_argument("--demo", help="a state name or 'all'")                            
+    mode.add_argument("--interactive", action="store_true", help="interactive mode (type state names)")
+    parser.add_argument("--seconds", type=float, default=4)                              
+    parser.add_argument("--pins", nargs=3, type=int, default=[5, 6, 13])                  # 3 ints: nargs=3, type=int, default [5, 6, 13]
     parser.add_argument("--blink-period", type=float, default=DEFAULT_BLINK_PERIOD_S)     # float, default DEFAULT_BLINK_PERIOD_S
     args = parser.parse_args()
     
-    if args.demo != "all" and args.demo not in STATES:
-        parser.error(f"Invalid state: {args.demo}")
+    if args.demo is not None and args.demo != "all" and args.demo not in STATES:
+        parser.error(f"Invalid state: {args.demo}. Must be one of {list(STATES)} or 'all'.")
     
     names = list(STATES) if args.demo == "all" else [args.demo]  
     
@@ -156,19 +159,41 @@ def main() -> int:
      
     led = RGBLED(*args.pins)
     light = StatusLight(led, blink_period_s=args.blink_period)
+    stop = threading.Event()
+    ticker = None
     try:
-        for name in names:
-            print(name)
-            light.set_state(name)
-            t_end = time.monotonic() + args.seconds
-            while time.monotonic() < t_end:
-                light.update()
-                time.sleep(0.02)
+        ticker = threading.Thread(target=run_ticker, args=(light, stop), daemon=True)
+        ticker.start()
+        if args.interactive:
+            while True:
+                try:
+                    line = input("state> ")
+                except EOFError:          # Ctrl-D
+                    break
+                cmd = parse_command(line)
+                if cmd == QUIT:
+                    break
+                elif cmd == TEST:
+                    light.set_state(TEST_SHOWS)  # TEST shows TEST_SHOWS, never set_state(TEST)
+                elif cmd is None:
+                    print(f"Valid states: {list(STATES)}")
+                    print(f"Current state: {light.state}")
+                else:
+                    light.set_state(cmd)
+        else:
+            for name in names:
+                light.set_state(name)
+                print(f"Showing state '{name}' for {args.seconds} seconds...")
+                time.sleep(args.seconds)
     except KeyboardInterrupt:
-        print()                           # Ctrl-C: a newline instead of a traceback
+        print()
     finally:
+        stop.set()
+        if ticker is not None:
+            ticker.join()
         led.off()
-        led.close()    # what you have now: off, close    
+        led.close()
     return 0
+
 if __name__ == "__main__":
     sys.exit(main())
