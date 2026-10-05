@@ -4,11 +4,13 @@ A bench stand-in: M3 replaces the WAV files with Piper TTS (ADR-003). set_state(
 
 Usage (from the repo root; -m is required):
     python -m software.skull_core.state_console [--voice-dir software/skull_core/voice] [--device MAX98357A]
-           [--volume 0.3] [--common-anode] [--pins 5 6 13] [--blink-period 1.0]
+           [--volume 1.0] [--common-anode] [--pins 5 6 13] [--blink-period 1.0]
+           [--demo STATE|all] [--seconds 3]
 """
 import argparse
 import sys
 import threading
+import time
 import wave
 
 from pathlib import Path
@@ -39,6 +41,20 @@ def wav_path(state: str, folder: Path) -> Path:
         raise ValueError(f"Invalid state: {state}")
     return folder / f"{state}.wav"
 
+
+def demo_names(choice: str) -> list[str]:
+    
+    """The states a --demo run shows, in STATES order.
+
+    "all" -> every state in STATES order; a state name -> [that name].
+    Anything else ("test", "quit", "", "ERROR") -> ValueError naming the bad choice.
+    """
+    all_names = list(STATES)
+    if choice == "all":
+        return all_names
+    if choice in all_names:
+        return [choice]
+    raise ValueError(f"Invalid demo choice: {choice}. Must be one of {all_names} or 'all'.")
 
 def missing_wavs(folder: Path) -> list[Path]:
     """Return missing required WAV paths in state-table order."""
@@ -91,6 +107,8 @@ def load_wav(path: Path) -> np.ndarray:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bench state console")
+    parser.add_argument("--demo", help="a state name or 'all' (default: the prompt)")
+    parser.add_argument("--seconds", type=float, default=3.0, help="how long each demo state holds")
     parser.add_argument("--voice-dir", type=Path, default=VOICE_DIR)
     parser.add_argument(
         "--device",
@@ -103,9 +121,18 @@ def main() -> int:
     parser.add_argument("--pins", nargs=3, type=int, default=[5, 6, 13], metavar=("R", "G", "B"))
     parser.add_argument("--blink-period", type=float, default=DEFAULT_BLINK_PERIOD_S)
     args = parser.parse_args()
+    
+    names = None
+    if args.demo is not None:
+        try:
+            names = demo_names(args.demo)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     if not 0 <= args.volume <= MAX_VOLUME:
         parser.error(f"--volume must be between 0 and {MAX_VOLUME}")
+    if args.seconds <= 0:
+        parser.error("--seconds must be positive")
     if args.blink_period <= 0:
         parser.error("--blink-period must be positive")
 
@@ -147,32 +174,42 @@ def main() -> int:
 
     try:
         ticker.start()
-        while True:
-            try:
-                line = input("> ")
-            except EOFError:
-                break
-            command = parse_command(line)
-            if command is None:
-                print("Unknown command. Enter a state, 'test', or 'quit'.")
-                continue
-            if command == QUIT:
-                break
-
-            if command == TEST:
-                light.set_state(TEST_SHOWS)
-                if TEST not in sounds:
-                    print(f"Optional test WAV is missing: {test_path}")
+        if names is not None:
+            for state in names:
+                print(f"Showing state '{state}' for {args.seconds} seconds...")
+                light.set_state(state)
+                try:
+                    sd.play(sounds[state], samplerate=WAV_RATE, device=args.device)
+                except sd.PortAudioError as exc:
+                    print(f"Audio playback failed: {exc}")
+                time.sleep(args.seconds)
+        else:
+            while True:
+                try:
+                    line = input("> ")
+                except EOFError:
+                    break
+                command = parse_command(line)
+                if command is None:
+                    print("Unknown command. Enter a state, 'test', or 'quit'.")
                     continue
-                sound = sounds[TEST]
-            else:
-                light.set_state(command)
-                sound = sounds[command]
+                if command == QUIT:
+                    break
 
-            try:
-                sd.play(sound, samplerate=WAV_RATE, device=args.device, blocking=True)
-            except sd.PortAudioError as exc:
-                print(f"Audio playback failed: {exc}")
+                if command == TEST:
+                    light.set_state(TEST_SHOWS)
+                    if TEST not in sounds:
+                        print(f"Optional test WAV is missing: {test_path}")
+                        continue
+                    sound = sounds[TEST]
+                else:
+                    light.set_state(command)
+                    sound = sounds[command]
+
+                try:
+                    sd.play(sound, samplerate=WAV_RATE, device=args.device, blocking=True)
+                except sd.PortAudioError as exc:
+                    print(f"Audio playback failed: {exc}")
     except KeyboardInterrupt:
         print()
     finally:
