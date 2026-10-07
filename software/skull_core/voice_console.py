@@ -165,7 +165,7 @@ def main(argv=None) -> int:
 
     if not (args.model_dir / "conf" / "model.conf").exists():
         print(f"Vosk model not found in {args.model_dir}", file=sys.stderr)
-        print(f"Download and unzip {MODEL_URL} there (see the M2-08 install steps),", file=sys.stderr)
+        print(f"Download and unzip {MODEL_URL} there (see the M3-01 install steps),", file=sys.stderr)
         print("or pass --model-dir.", file=sys.stderr)
         return 1
 
