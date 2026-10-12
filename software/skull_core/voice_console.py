@@ -51,8 +51,8 @@ def grammar_json() -> str:
 
     Only STATES. "test" and "quit" are console commands, not things you can say.
     """
-    # TODO 1: one line with json.dumps. Build the list from STATES, don't type the words again.
-    raise NotImplementedError("TODO 1")
+    STATE_NAMES = [state for state in STATES if state not in ("test", "quit")]
+    return json.dumps(STATE_NAMES + [UNKNOWN])
 
 
 def parse_result(result_json: str) -> str | None:
@@ -61,9 +61,12 @@ def parse_result(result_json: str) -> str | None:
     None for: empty text, UNKNOWN, two or more words, a console command ("quit", "test"),
     and malformed JSON or a missing "text" key (a bad message must not crash the console).
     """
-    # TODO 2: json.loads inside try/except, get "text" with a default, then reuse parse_command()
-    #         from M2-06. parse_command also accepts "quit" and "test": only a name in STATES counts.
-    raise NotImplementedError("TODO 2")
+    try:
+        result = json.loads(result_json)
+        word = parse_command(result.get("text", ""))
+        return word if word in STATES else None
+    except (json.JSONDecodeError, AttributeError):
+        return None
 
 
 def recognise(recognizer, samples) -> str | None:
@@ -72,8 +75,10 @@ def recognise(recognizer, samples) -> str | None:
     recognizer is a vosk.KaldiRecognizer (a fake in the tests). AcceptWaveform wants bytes;
     FinalResult() returns the JSON text for everything fed so far and resets it for the next turn.
     """
-    # TODO 3: AcceptWaveform(<the samples as bytes>), then FinalResult(), then parse_result(). 2-3 lines.
-    raise NotImplementedError("TODO 3")
+    into_bytes = samples.tobytes()  # int16 numpy array -> bytes
+    recognizer.AcceptWaveform(into_bytes)
+    result_json = recognizer.FinalResult()
+    return parse_result(result_json)
 
 
 class HalfDuplexGuard:
@@ -95,8 +100,8 @@ class HalfDuplexGuard:
 
     def stop_speaking(self) -> None:
         """Playback has ended: the mic opens again tail_s from now."""
-        # TODO 4: two lines. Clear the flag; set self._open_at from self.clock() (not time.monotonic).
-        raise NotImplementedError("TODO 4")
+        self._open_at = self.clock() + self.tail_s
+        self.is_speaking = False
 
     def seconds_until_open(self) -> float:
         """0.0 when the mic may listen now. While speaking: math.inf. After: the time left of the tail.
@@ -104,7 +109,9 @@ class HalfDuplexGuard:
         Same convention as color_at in M2-06: at exactly _open_at the mic is already open.
         """
         # TODO 5: three cases, never negative.
-        raise NotImplementedError("TODO 5")
+        if self.is_speaking:
+            return math.inf
+        return max(0.0, self._open_at - self.clock())
 
     def mic_open(self) -> bool:
         return self.seconds_until_open() == 0.0
@@ -130,8 +137,21 @@ def push_to_talk_turn(light: StatusLight, guard: HalfDuplexGuard, listen, say, s
     3. None: put the light back to the remembered state and return None. Say nothing.
     4. A state: show it, then call say(state) INSIDE `with guard.speaking():`, and return the state.
     """
-    # TODO 6: about 8 lines, steps 1-4 above. (THINKING while Vosk decodes is done in main's listen().)
-    raise NotImplementedError("TODO 6")
+    if not guard.mic_open():
+        sleep(guard.seconds_until_open())
+
+    light_state = light.state
+    light.set_state(LISTENING)
+    listened_state = listen()
+    listened_state = listened_state if listened_state in STATES else None
+    if listened_state is None:
+        light.set_state(light_state)
+        return None
+
+    light.set_state(listened_state)
+    with guard.speaking():
+        say(listened_state)
+    return listened_state
 
 
 def parse_args(argv=None) -> argparse.Namespace:
