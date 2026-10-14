@@ -88,6 +88,11 @@ def test_malformed_results_give_none_not_a_crash(raw):
     assert vc.parse_result(raw) is None
 
 
+@pytest.mark.parametrize("raw", ["[]", "null", "5", '"x"', '{"text": 5}'])
+def test_valid_json_that_is_not_a_result_object_gives_none_not_a_crash(raw):
+    assert vc.parse_result(raw) is None
+
+
 # --- TODO 3: recognise ---------------------------------------------------------------------
 
 def test_recognise_feeds_int16_bytes_and_reads_the_final_result():
@@ -205,6 +210,20 @@ def test_unknown_word_restores_the_light_and_says_nothing():
     assert light.state == "offline"
     assert [entry[0] for entry in log] == ["listen"]
     assert guard.mic_open()
+
+
+def test_a_miss_never_engages_the_guard_so_the_next_turn_listens_at_once():
+    clock, light, guard, log, listen, say, sleep = make_turn(None, tail=0.3)
+    starts = []
+    start_speaking = guard.start_speaking
+    guard.start_speaking = lambda: (starts.append(clock.t), start_speaking())
+    assert vc.push_to_talk_turn(light, guard, listen, say, sleep) is None
+    assert starts == []                         # the skull said nothing, so no speaking mode
+    assert not guard.is_speaking
+    assert guard.seconds_until_open() == 0.0    # no tail started either
+    log.clear()
+    vc.push_to_talk_turn(light, guard, listen, say, sleep)
+    assert log == [("listen", "listening", True)]
 
 
 # --- main, with every device faked ---------------------------------------------------------
