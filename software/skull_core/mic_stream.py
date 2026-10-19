@@ -221,9 +221,43 @@ class SpeechDetector:
         """Feed one block. Returns a "start" or an "end" SpeechEvent when one is due, else None.
 
         Keeps self.in_speech true between the two events. See the class docstring for the rules.
+
+        Three states, read from the fields that reset() names:
+          silence  _began_at is None                     waiting for a loud block
+          burst    _began_at is set, in_speech False     begun, not long enough yet to call it speech
+          speech   in_speech True                        "start" returned, "end" not yet
         """
-        # TODO 7: the state machine. Draw the states and both thresholds on paper before you type.
-        raise NotImplementedError("TODO 7")
+        level = block_dbfs(block.samples)
+        loud = level >= self.start_dbfs
+        quiet = level < self.end_dbfs   # a block that is neither sits in the dead band: it moves nothing
+        t = block.t_end
+
+        # Silence: only a loud block can begin something. Between-level blocks are ignored here,
+        # so a voice hovering just under start_dbfs never starts speech.
+        if self._began_at is None and not loud:
+            return None
+
+        # Burst or speech, and this block is not quiet: the sound goes on.
+        if not quiet:
+            if self._began_at is None:
+                self._began_at = t          # silence -> burst
+            self._last_voiced_at = t
+            # burst -> speech once it has lasted min_speech_s (at once when that is 0).
+            if not self.in_speech and t - self._began_at >= self.min_speech_s:
+                self.in_speech = True
+                return SpeechEvent("start", self._began_at)
+            return None
+
+        # A quiet block in a burst or in speech: wait out the hang time, so a pause between words
+        # does not end the utterance.
+        if t - self._last_voiced_at < self.hang_s:
+            return None
+        # Quiet for hang_s: back to silence. Only speech reports an end; a burst that never
+        # became speech (a click) is forgotten without any event.
+        was_speech = self.in_speech
+        stopped_at = self._last_voiced_at
+        self.reset()
+        return SpeechEvent("end", stopped_at) if was_speech else None
 
 
 class MicStream:
@@ -369,8 +403,13 @@ def counters_text(stats: MicStats) -> str:
             f"queue_full {stats.queue_full} overflows {stats.input_overflows}")
 
 
+def print_now(text: str) -> None:
+    """print() with flush, so each --monitor line shows at once when piped into `tee`."""
+    print(text, flush=True)
+
+
 def monitor(mic, detector=None, stop=None, *, run_s=None, period_s=DEFAULT_PERIOD_S,
-            window_s=DEFAULT_WINDOW_S, stall_s=STALL_S, clock=time.monotonic, out=print) -> int:
+            window_s=DEFAULT_WINDOW_S, stall_s=STALL_S, clock=time.monotonic, out=print_now) -> int:
     """Read the stream and report on it until `stop` is set, or for run_s seconds.
 
     Every period_s: the level of the ring's last window_s, the gate and the counters.
