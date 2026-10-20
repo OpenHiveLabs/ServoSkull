@@ -1,0 +1,11 @@
+# Fixed lines for the phrase bank: one per line, exact text. Lines starting with # are skipped.
+# Build them on the Pi with:
+#   python -m software.skull_core.voice_out --build-bank software/skull_core/voice/bank_lines.txt
+# The audio goes to ~/skull-voice/bank/ (outside the repo).
+#
+# Brain failure lines, copied from brain.py (FALLBACK_LINE, REFUSAL_LINE). A test checks they match.
+I can't reach my brain.
+My brain won't answer that.
+#
+# TODO (Ersin): the wording of the other fixed lines (offline, limit reached, and so on) is yours.
+# Add them here; until then nothing else is pre-generated.

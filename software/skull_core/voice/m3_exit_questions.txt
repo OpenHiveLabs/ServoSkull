@@ -1,0 +1,16 @@
+# M3-08 exit test: the ten questions, asked in this order, one per turn. Lines starting with # are skipped.
+# The same list is asked again at the M6 repeat (in the skull), so the two runs can be compared.
+#
+# PROVISIONAL (2026-10-20): copied from the M3-04 phrase list as a placeholder.
+# TODO (Ersin): replace it with your own list if you want; change it BEFORE the first recorded run,
+# never between M3 and M6.
+What is the temperature of your brain?
+How many legs do you have?
+Tell me a short joke about robots.
+What day comes after Friday?
+Can you see me right now?
+Good morning. How are you today?
+Turn your eyes red.
+Where were you built?
+Who is the smartest scientist you know?
+I am going to the workshop. Wish me luck.
